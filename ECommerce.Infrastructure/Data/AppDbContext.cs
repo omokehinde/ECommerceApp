@@ -25,6 +25,8 @@ public class AppDbContext : DbContext
         {
             entity.Property(p => p.Description).HasMaxLength(2000);
             entity.Property(p => p.ImageUrl).HasMaxLength(500);
+            entity.Property(p => p.Price) 
+            .HasPrecision(18, 2);  
         });
     }
 }
