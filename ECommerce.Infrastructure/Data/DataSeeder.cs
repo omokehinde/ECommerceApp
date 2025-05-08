@@ -27,19 +27,28 @@ public static class DataSeeder
                 }
             };
             context.Products.AddRange(products);
-        }
-
-        // Seed CartItems (optional)
-        if (!context.CartItems.Any())
-        {
+            context.SaveChanges(); // Products get actual IDs here
+            
+            // Use the generated Product IDs for cart items
+            var productIds = products.Select(p => p.Id).ToList();
+            
             var cartItems = new List<CartItem>
             {
-                new CartItem { ProductId = 1, Quantity = 2 }, // Links to Wireless Headphones
-                new CartItem { ProductId = 2, Quantity = 1 }  // Links to Smartwatch
+                new CartItem 
+                {
+                    ProductId = products[0].Id,
+                    Quantity = 2,
+                    Product = products[0] // Explicitly set navigation property
+                },
+                new CartItem 
+                {
+                    ProductId = products[1].Id,
+                    Quantity = 1,
+                    Product = products[1]
+                }
             };
             context.CartItems.AddRange(cartItems);
+            context.SaveChanges();
         }
-
-        context.SaveChanges();
     }
 }

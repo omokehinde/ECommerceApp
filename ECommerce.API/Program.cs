@@ -3,6 +3,10 @@ using Microsoft.EntityFrameworkCore;   // For UseSqlServer()
 
 var builder = WebApplication.CreateBuilder(args);
 
+// Add Razor Pages support
+builder.Services.AddRazorPages()
+    .AddRazorRuntimeCompilation(); // Optional: for runtime compilation of Razor pages
+
 // Add DbContext
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -14,6 +18,17 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+// Serve static files (CSS, JS, images)
+app.UseStaticFiles();
+
+// Map Razor Pages
+app.MapRazorPages();
+
+app.MapControllers(); // Map API controllers
+
+// Redirect root URL to Login page
+app.MapGet("/", () => Results.Redirect("/Login"));   // Optional but helpful
 
 // Seed data on startup
 using (var scope = app.Services.CreateScope())

@@ -1,0 +1,285 @@
+@page
+@model ECommerce.API.Pages.MainModel
+@{
+    ViewData["Title"] = "E-Commerce Store";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/site.css" />
+}
+
+<div class="container">
+    <header>
+        <h1>Our Products</h1>
+        <button class="cart-icon" 
+                onclick="toggleCart()" 
+                aria-label="View shopping cart"
+                onkeydown="handleCartKeyPress(event)">
+            🛒 <span id="cartCount">0</span>
+        </button>
+    </header>
+
+    <div id="products" class="product-grid"></div>
+
+    <div id="cartPanel" class="cart-panel">
+        <h2>Shopping Cart</h2>
+        <div id="cartItems" class="cart-items-container"></div>
+        <button type="button" 
+                class="clear-cart-btn"
+                onclick="clearCart()" 
+                aria-label="Clear entire cart">
+            Clear Cart
+        </button>
+    </div>
+</div>
+
+<style>
+    /* Improved UI Styles */
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 20px;
+    }
+
+    .product-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+        gap: 20px;
+        margin-top: 20px;
+    }
+
+    .product-card {
+        background: white;
+        border-radius: 10px;
+        padding: 15px;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        transition: transform 0.2s;
+    }
+
+    .product-card:hover {
+        transform: translateY(-5px);
+    }
+
+    .product-card img {
+        width: 100%;
+        height: 200px;
+        object-fit: cover;
+        border-radius: 5px;
+    }
+
+    .price {
+        color: #2c3e50;
+        font-size: 1.2em;
+        font-weight: bold;
+        margin: 10px 0;
+    }
+
+    .quantity-controls {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 15px;
+    }
+
+    .quantity-controls button {
+        padding: 5px 15px;
+        border: none;
+        border-radius: 5px;
+        background: #3498db;
+        color: white;
+        cursor: pointer;
+    }
+
+    .cart-panel {
+        position: fixed;
+        right: -10px;
+        top: 0;
+        width: 300px;
+        height: 100vh;
+        background: white;
+        box-shadow: -2px 0 5px rgba(0,0,0,0.1);
+        transition: right 0.3s;
+        padding: 20px;
+    }
+
+    .cart-panel.visible {
+        right: 0;
+    }
+
+    .cart-item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 10px 0;
+        border-bottom: 1px solid #eee;
+    }
+
+    .clear-cart-btn {
+        margin-top: 20px;
+        width: 100%;
+        padding: 10px;
+        background: #e74c3c;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        cursor: pointer;
+    }
+</style>
+
+<script>
+    // Initialize cart display on page load
+    if (!sessionStorage.getItem('isAuthenticated')) {
+        window.location.href = '/Login';
+    } else {
+        loadProducts();
+        updateCartDisplay();
+    }
+
+    function handleCartKeyPress(event) {
+        // Trigger toggle on Enter or Spacebar
+        if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            toggleCart();
+        }
+    }
+
+    async function loadProducts() {
+        try {
+            const response = await fetch('/api/products');
+            if (!response.ok) throw new Error('Network response was not ok');
+            
+            const products = await response.json();
+            const productsDiv = document.getElementById('products');
+            
+            products.forEach(product => {
+                productsDiv.innerHTML += `
+                    <div class="product-card">
+                        <img src="${product.imageUrl}" alt="${product.name}">
+                        <h3>${product.name}</h3>
+                        <p>${product.description}</p>
+                        <p class="price">$${product.price.toFixed(2)}</p>
+                        <div class="quantity-controls">
+                            <button type="button" 
+                                    onclick="updateCartItem(${product.id}, -1)"
+                                    aria-label="Decrease quantity for ${product.name}">
+                                -
+                            </button>
+                            <span id="qty-${product.id}">0</span>
+                            <button type="button" 
+                                    onclick="updateCartItem(${product.id}, 1)"
+                                    aria-label="Increase quantity for ${product.name}">
+                                +
+                            </button>
+                        </div>
+                    </div>
+                `;
+            });
+        } catch (error) {
+            console.error('Error loading products:', error);
+        }
+    }
+
+    async function updateCartItem(productId, quantityChange) {
+        try {
+            const quantitySpan = document.getElementById(`qty-${productId}`);
+            const currentQty = parseInt(quantitySpan.textContent) || 0;
+            const newQty = currentQty + quantityChange;
+
+            if (newQty < 0) return;
+
+            // Optimistic update
+            quantitySpan.textContent = newQty;
+            updateCartCountOptimistically(quantityChange);
+
+            const response = await fetch('/api/carts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ productId, quantityChange })
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                console.error('Server error:', error);
+                quantitySpan.textContent = currentQty;
+                updateCartCountOptimistically(-quantityChange);
+            } else {
+                updateCartDisplay();
+            }
+        } catch (error) {
+            console.error('Network error:', error);
+            quantitySpan.textContent = currentQty;
+            updateCartCountOptimistically(-quantityChange);
+        }
+    }
+
+    // Optimistically update the cart count in the UI
+    // This helper function is called when the cart count is updated
+    function updateCartCountOptimistically(change) {
+        const cartCount = document.getElementById('cartCount');
+        const currentCount = parseInt(cartCount.textContent) || 0;
+        cartCount.textContent = Math.max(currentCount + change, 0);
+    }
+
+    async function updateCartDisplay() {
+        try {
+            const response = await fetch('/api/carts');
+            if (!response.ok) throw new Error('Failed to load cart');
+            
+            const cartItems = await response.json();
+            document.getElementById('cartCount').textContent = cartItems.reduce((acc, item) => acc + item.quantity, 0);
+            
+            const cartItemsDiv = document.getElementById('cartItems');
+            cartItemsDiv.innerHTML = cartItems.map(item => `
+                <div class="cart-item">
+                    <div>
+                        <strong>${item.product.name}</strong>
+                        <p>$${item.product.price.toFixed(2)} x ${item.quantity}</p>
+                    </div>
+                    <div class="cart-controls">
+                        <button type="button" 
+                                onclick="updateCartItem(${item.productId}, -1)"
+                                aria-label="Decrease quantity of ${item.product.name}">
+                            -
+                        </button>
+                        <button type="button" 
+                                onclick="updateCartItem(${item.productId}, 1)"
+                                aria-label="Increase quantity of ${item.product.name}">
+                            +
+                        </button>
+                        <button type="button" 
+                                onclick="removeCartItem(${item.id})"
+                                aria-label="Remove ${item.product.name} from cart">
+                            🗑️
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+        } catch (error) {
+            console.error('Error updating cart display:', error);
+        }
+    }
+
+    async function removeCartItem(cartItemId) {
+        try {
+            await fetch(`/api/carts/${cartItemId}`, { method: 'DELETE' });
+            updateCartDisplay();
+        } catch (error) {
+            console.error('Error removing item:', error);
+        }
+    }
+
+    async function clearCart() {
+        try {
+            const response = await fetch('/api/carts/clear', { method: 'DELETE' });
+            if (response.ok) {
+                updateCartDisplay();
+            }
+        } catch (error) {
+            console.error('Error clearing cart:', error);
+        }
+    }
+
+    function toggleCart() {
+        document.getElementById('cartPanel').classList.toggle('visible');
+    }
+</script>

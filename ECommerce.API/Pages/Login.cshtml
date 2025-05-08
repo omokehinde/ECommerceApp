@@ -1,0 +1,36 @@
+@page
+@model ECommerce.API.Pages.LoginModel
+@{
+    ViewData["Title"] = "Login";
+}
+
+@section Styles {
+    <link rel="stylesheet" href="~/css/site.css" />
+}
+
+<div class="login-container">
+    <h2>Login</h2>
+    <form id="loginForm">
+        <input type="text" id="username" placeholder="Username" required>
+        <input type="password" id="password" placeholder="Password" required>
+        <button type="submit">Login</button>
+    </form>
+</div>
+
+<script>
+    // Clear cart when login page loads
+    (async function() {
+        try {
+            await fetch('/api/carts/clear', { method: 'DELETE' });
+            sessionStorage.removeItem('isAuthenticated');
+        } catch (error) {
+            console.error('Error clearing cart:', error);
+        }
+    })();
+
+    document.getElementById('loginForm').addEventListener('submit', function(e) {
+        e.preventDefault();
+        sessionStorage.setItem('isAuthenticated', 'true');
+        window.location.href = '/Main';
+    });
+</script>
